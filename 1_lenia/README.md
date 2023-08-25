@@ -4,7 +4,7 @@ This is an implementation of [Lenia](https://chakazul.github.io/lenia.html).
 ## Comparison
 
 ### CPU
-Tested on 256x256 field.
+Tested on 256x256 field and 1024 iterations.
 
 | Name | Time per iteration | Speedup |
 | ----- | ----- | ----- |
