@@ -83,9 +83,9 @@ __global__ void make_step(
         const size_t ki_offset = ki * kernel_size;
         for (size_t kj = 0; kj < kernel_size; ++kj) {
             const float k = kernel[ki_offset + kj];
-                const size_t src_i_offset = (thread_pos_y + ki) * PADDED_SIZE + kj;
-                const size_t src_offset = src_i_offset + thread_pos_x;
-                next_state_val += k * current_state_padded[src_offset];
+            const size_t src_i_offset = (thread_pos_y + ki) * PADDED_SIZE + kj;
+            const size_t src_offset = src_i_offset + thread_pos_x;
+            next_state_val += k * current_state_padded[src_offset];
         }
     }
 

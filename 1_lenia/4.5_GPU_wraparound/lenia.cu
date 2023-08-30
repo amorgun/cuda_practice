@@ -52,24 +52,19 @@ void init_kernel(float *const kernel, const size_t size, const size_t R, const f
 }
 
 __host__ void pad_field(
-    float const *const __restrict__ src, float *const __restrict__ dst, const size_t src_size, const size_t pad_size, cudaStream_t streams[3]
+    float const *const __restrict__ src, float *const __restrict__ dst, const size_t src_size, const size_t pad_size
 )
 {
     const size_t PADDED_SIZE = src_size + 2 * pad_size;
-    gpuErrchk(cudaMemcpy2DAsync(&dst[pad_size * PADDED_SIZE + pad_size], PADDED_SIZE * sizeof(float), src, src_size * sizeof(float), src_size * sizeof(float), src_size, cudaMemcpyDeviceToDevice, streams[0]));
-    gpuErrchk(cudaMemcpy2DAsync(&dst[pad_size * PADDED_SIZE], PADDED_SIZE * sizeof(float), &src[src_size - pad_size], src_size * sizeof(float), pad_size * sizeof(float), src_size, cudaMemcpyDeviceToDevice, streams[1]));
-    gpuErrchk(cudaMemcpy2DAsync(&dst[pad_size * PADDED_SIZE + pad_size + src_size], PADDED_SIZE * sizeof(float), src, src_size * sizeof(float), pad_size * sizeof(float), src_size, cudaMemcpyDeviceToDevice, streams[2]));
-    gpuErrchk(cudaStreamSynchronize(streams[0]));
-    gpuErrchk(cudaStreamSynchronize(streams[1]));
-    gpuErrchk(cudaStreamSynchronize(streams[2]));
-    gpuErrchk(cudaMemcpyAsync(&dst[0], &dst[src_size * PADDED_SIZE], PADDED_SIZE * pad_size * sizeof(float), cudaMemcpyDeviceToDevice, streams[0]));
-    gpuErrchk(cudaMemcpyAsync(&dst[(pad_size + src_size)* PADDED_SIZE], &dst[pad_size * PADDED_SIZE], PADDED_SIZE * pad_size * sizeof(float), cudaMemcpyDeviceToDevice, streams[1]));
-    gpuErrchk(cudaStreamSynchronize(streams[0]));
-    gpuErrchk(cudaStreamSynchronize(streams[1]));
+    gpuErrchk(cudaMemcpy2D(&dst[pad_size * PADDED_SIZE + pad_size], PADDED_SIZE * sizeof(float), src, src_size * sizeof(float), src_size * sizeof(float), src_size, cudaMemcpyDeviceToDevice));
+    gpuErrchk(cudaMemcpy2D(&dst[pad_size * PADDED_SIZE], PADDED_SIZE * sizeof(float), &src[src_size - pad_size], src_size * sizeof(float), pad_size * sizeof(float), src_size, cudaMemcpyDeviceToDevice));
+    gpuErrchk(cudaMemcpy2D(&dst[pad_size * PADDED_SIZE + pad_size + src_size], PADDED_SIZE * sizeof(float), src, src_size * sizeof(float), pad_size * sizeof(float), src_size, cudaMemcpyDeviceToDevice));
+    gpuErrchk(cudaMemcpy(&dst[0], &dst[src_size * PADDED_SIZE], PADDED_SIZE * pad_size * sizeof(float), cudaMemcpyDeviceToDevice));
+    gpuErrchk(cudaMemcpy(&dst[(pad_size + src_size)* PADDED_SIZE], &dst[pad_size * PADDED_SIZE], PADDED_SIZE * pad_size * sizeof(float), cudaMemcpyDeviceToDevice));
 }
 
 __global__ void make_step(
-        float const *const __restrict__ current_state, float const *const __restrict__ current_state_padded,
+        float const *const __restrict__ current_state,
         float *const __restrict__ next_state, const size_t size,
         float const *const __restrict__ kernel, const size_t kernel_size,
         const float dT, const float growth_mean, const float growth_std
@@ -88,9 +83,13 @@ __global__ void make_step(
         const size_t ki_offset = ki * kernel_size;
         for (size_t kj = 0; kj < kernel_size; ++kj) {
             const float k = kernel[ki_offset + kj];
-            const size_t src_i_offset = (thread_pos_y + ki) * PADDED_SIZE + kj;
+            size_t src_i = (thread_pos_y + ki + size - R);
+            src_i -= src_i > size ? size : 0;
+            size_t src_j = (thread_pos_x + kj + size - R);
+            src_j -= src_j > size ? size : 0;
+            const size_t src_i_offset = src_i * PADDED_SIZE + src_j;
             const size_t src_offset = src_i_offset + thread_pos_x;
-            next_state_val += k * current_state_padded[src_offset];
+            next_state_val += k * current_state[src_offset];
         }
     }
 
@@ -152,8 +151,7 @@ int main(int argc, char *argv[])
 
         FIELD_DATA_SIZE = FIELD_SIZE * FIELD_SIZE;
         RESULT_DATA_SIZE = FIELD_DATA_SIZE * (nsteps + 1);
-        cudaHostAlloc(&result, RESULT_DATA_SIZE * sizeof(float), 0);
-
+        result = (float*)calloc(RESULT_DATA_SIZE, sizeof(float));
         if (!fread(result, FIELD_DATA_SIZE * sizeof(float), 1, inFile)) {
             printf("Cannot read field\n");
             abort();
@@ -194,26 +192,15 @@ int main(int argc, char *argv[])
     dim3 blocks_shape = dim3(24, 32);
     dim3 grid_shape  = dim3((FIELD_SIZE + blocks_shape.x - 1) / blocks_shape.x, (FIELD_SIZE + blocks_shape.y - 1) / blocks_shape.y);
 
-    cudaStream_t pad_streams[3], kernel_stream, copy_stream;
-    gpuErrchk(cudaStreamCreate(&pad_streams[0]));
-    gpuErrchk(cudaStreamCreate(&pad_streams[1]));
-    gpuErrchk(cudaStreamCreate(&pad_streams[2]));
-    gpuErrchk(cudaStreamCreate(&kernel_stream));
-    gpuErrchk(cudaStreamCreate(&copy_stream));
-
     for (size_t it = 0; it < nsteps; ++it) {
         float *const next_state = &result[(it+1) * FIELD_DATA_SIZE];
-        pad_field(current_field_gpu, current_field_padded_gpu, FIELD_SIZE, R, pad_streams);
-        make_step<<<grid_shape, blocks_shape, 0, kernel_stream>>>(current_field_gpu, current_field_padded_gpu, next_field_gpu, FIELD_SIZE, kernel_gpu, KERNEL_SIZE, dT, GROWSH_MEAN, GROWSH_STD);
-        gpuErrchk(cudaStreamSynchronize(kernel_stream));
-        gpuErrchk(cudaStreamSynchronize(copy_stream));
-        gpuErrchk(cudaMemcpyAsync(next_state, next_field_gpu, FIELD_DATA_SIZE * sizeof(float), cudaMemcpyDeviceToHost, copy_stream));
+        make_step<<<grid_shape, blocks_shape>>>(current_field_gpu, next_field_gpu, FIELD_SIZE, kernel_gpu, KERNEL_SIZE, dT, GROWSH_MEAN, GROWSH_STD);
+        gpuErrchk(cudaMemcpy(next_state, next_field_gpu, FIELD_DATA_SIZE * sizeof(float), cudaMemcpyDeviceToHost));
         float *tmp = current_field_gpu;
         current_field_gpu = next_field_gpu;
         next_field_gpu = tmp;
-        gpuErrchk(cudaMemsetAsync(next_field_gpu, 0, FIELD_DATA_SIZE * sizeof(float), kernel_stream));
+        gpuErrchk(cudaMemset(next_field_gpu, 0, FIELD_DATA_SIZE * sizeof(float)));
     }
-    gpuErrchk(cudaStreamSynchronize(copy_stream));
     cudaEventRecord(stop);
     cudaDeviceSynchronize();
     float time_diff_ms = 0;
@@ -231,5 +218,5 @@ int main(int argc, char *argv[])
     cudaFree(next_field_gpu);
     cudaFree(current_field_padded_gpu);
     free(kernel);
-    cudaFreeHost(result);
+    free(result);
 }

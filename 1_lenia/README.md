@@ -20,4 +20,4 @@ Tested on 256x256 field and 4096 iterations.
 | ----- | ----- | ----- |
 | CPU baseline | 1.8397 ms | x1 |
 | CUDA naive | 0.2594 ms | x7.09 |
-| +async | 0.1558 ms | x11.8 |
+| +Async | 0.1558 ms | x11.8 |
