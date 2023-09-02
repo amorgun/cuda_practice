@@ -18,6 +18,8 @@ Tested on 256x256 field and 4096 iterations.
 
 | Name | Time per iteration | Speedup |
 | ----- | ----- | ----- |
-| CPU baseline | 1.8397 ms | x1 |
+| Best CPU baseline | 1.8397 ms | x1 |
 | CUDA naive | 0.2594 ms | x7.09 |
 | +Async | 0.1558 ms | x11.8 |
+| +Shared memory | 0.1408 ms | x13.06 |
+| +Constant memory | 0.0799 ms | x23 |
