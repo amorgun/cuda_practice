@@ -23,3 +23,4 @@ Tested on 256x256 field and 4096 iterations.
 | +Async | 0.1558 ms | x11.8 |
 | +Shared memory | 0.1408 ms | x13.06 |
 | +Constant memory | 0.0799 ms | x23 |
+| +Multiple pixels per thread | 0.04963 ms| x37.06 |
