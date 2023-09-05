@@ -101,36 +101,22 @@ __global__ void make_step(
         const size_t src_i_offset = (threadIdx.y + ki) * STATE_DATA_SIZE_X + threadIdx.x * OPS_PER_THREAD;
         for (size_t kj = 0; kj < kernel_size; ++kj) {
             const float kernel_val = kernel_const[ki_offset + kj];
-            next_state_val[0] += kernel_val * state_shared[src_i_offset + kj];
-            next_state_val[1] += kernel_val * state_shared[src_i_offset + kj + 1];
-            next_state_val[2] += kernel_val * state_shared[src_i_offset + kj + 2];
-            next_state_val[3] += kernel_val * state_shared[src_i_offset + kj + 3];
-            // next_state_val[4] += kernel_val * state_shared[src_i_offset + kj + 4];
-            // next_state_val[5] += kernel_val * state_shared[src_i_offset + kj + 5];
-            // next_state_val[6] += kernel_val * state_shared[src_i_offset + kj + 6];
-            // next_state_val[7] += kernel_val * state_shared[src_i_offset + kj + 7];
+            #pragma unroll
+            for (size_t i = 0; i < OPS_PER_THREAD; ++i) {
+                next_state_val[i] += kernel_val * state_shared[src_i_offset + kj + i];
+            }
         }
     }
 
     const size_t idx = (threadIdx.y + R) * STATE_DATA_SIZE_X + threadIdx.x * OPS_PER_THREAD + R;
-    next_state_val[0] = clamp(state_shared[idx] + dT * (bell(next_state_val[0], growth_mean, growth_std) * 2 - 1), 0, 1);
-    next_state_val[1] = clamp(state_shared[idx + 1] + dT * (bell(next_state_val[1], growth_mean, growth_std) * 2 - 1), 0, 1);
-    next_state_val[2] = clamp(state_shared[idx + 2] + dT * (bell(next_state_val[2], growth_mean, growth_std) * 2 - 1), 0, 1);
-    next_state_val[3] = clamp(state_shared[idx + 3] + dT * (bell(next_state_val[3], growth_mean, growth_std) * 2 - 1), 0, 1);
-    // next_state_val[4] = clamp(state_shared[idx + 4] + dT * (bell(next_state_val[4], growth_mean, growth_std) * 2 - 1), 0, 1);
-    // next_state_val[5] = clamp(state_shared[idx + 5] + dT * (bell(next_state_val[5], growth_mean, growth_std) * 2 - 1), 0, 1);
-    // next_state_val[6] = clamp(state_shared[idx + 6] + dT * (bell(next_state_val[6], growth_mean, growth_std) * 2 - 1), 0, 1);
-    // next_state_val[7] = clamp(state_shared[idx + 7] + dT * (bell(next_state_val[7], growth_mean, growth_std) * 2 - 1), 0, 1);
-
-    next_state[thread_pos_y * size + thread_pos_x * OPS_PER_THREAD] = next_state_val[0];
-    next_state[thread_pos_y * size + thread_pos_x * OPS_PER_THREAD + 1] = next_state_val[1];
-    next_state[thread_pos_y * size + thread_pos_x * OPS_PER_THREAD + 2] = next_state_val[2];
-    next_state[thread_pos_y * size + thread_pos_x * OPS_PER_THREAD + 3] = next_state_val[3];
-    // next_state[thread_pos_y * size + thread_pos_x * OPS_PER_THREAD + 4] = next_state_val[4];
-    // next_state[thread_pos_y * size + thread_pos_x * OPS_PER_THREAD + 5] = next_state_val[5];
-    // next_state[thread_pos_y * size + thread_pos_x * OPS_PER_THREAD + 6] = next_state_val[6];
-    // next_state[thread_pos_y * size + thread_pos_x * OPS_PER_THREAD + 7] = next_state_val[7];
-
+    #pragma unroll
+    for (size_t i = 0; i < OPS_PER_THREAD; ++i) {
+        next_state_val[i] = clamp(state_shared[idx + i] + dT * (bell(next_state_val[i], growth_mean, growth_std) * 2 - 1), 0, 1);
+    }
+    #pragma unroll
+    for (size_t i = 0; i < OPS_PER_THREAD; ++i) {
+        next_state[thread_pos_y * size + thread_pos_x * OPS_PER_THREAD + i] = next_state_val[i];
+    }
 }
 
 int main(int argc, char *argv[])
