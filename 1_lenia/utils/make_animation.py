@@ -14,12 +14,13 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--interval', default=30, type=int)
     parser.add_argument('--interpolation', default='bicubic', type=str)
     parser.add_argument('--dpi', default=100, type=int)
+    parser.add_argument('-s', '--size', default=8, type=int)
     args = parser.parse_args()
 
     FFMpegWriter = animation.writers['ffmpeg']
     writer = FFMpegWriter(fps=1000. / args.interval)
     fig, ax = plt.subplots(dpi=args.dpi, frameon=False)
-    fig.set_size_inches(8, 8, forward=True)
+    fig.set_size_inches(args.size, args.size, forward=True)
     fig.subplots_adjust(left=0, bottom=0, right=1, top=1, wspace=None, hspace=None)
     ax.axis('off')
     im = None

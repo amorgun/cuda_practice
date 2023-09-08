@@ -1,4 +1,6 @@
 # Lenia implementation
+![demo](./images/demo_256.gif)
+
 This is an implementation of [Lenia](https://chakazul.github.io/lenia.html).
 
 ## Comparison
@@ -24,3 +26,6 @@ Tested on 256x256 field and 4096 iterations.
 | +Shared memory | 0.1408 ms | x13.06 |
 | +Constant memory | 0.0799 ms | x23 |
 | +Multiple pixels per thread | 0.04963 ms| x37.06 |
+
+
+![demo](./images/demo_512.gif)
